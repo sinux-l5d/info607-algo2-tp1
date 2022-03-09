@@ -92,6 +92,30 @@ gboolean selectOutput( GtkWidget *widget, gpointer data )
 
 gboolean seuillerImage( GtkWidget *widget, gpointer data )
 {
+  Contexte* ctx = (Contexte*) data;
+  guchar* dataInput = gdk_pixbuf_get_pixels( ctx->pixbuf_input );          // Pointeur vers le tampon de données
+  guchar* dataOutput = gdk_pixbuf_get_pixels( ctx->pixbuf_output );          // Pointeur vers le tampon de données
+  int rowstrideIn = gdk_pixbuf_get_rowstride( ctx->pixbuf_input ); // nmb octets dans la ligne
+  int rowstrideOut = gdk_pixbuf_get_rowstride( ctx->pixbuf_output ); // nmb octets dans la ligne
+  int seuilValue = gtk_range_get_value( GTK_RANGE( ctx->seuil ) );
+
+  for ( int y = 0; y < ctx->height; ++y )
+  {
+    Pixel* pixelIn = (Pixel*) dataInput;
+    Pixel* pixelOut = (Pixel*) dataOutput;
+    for ( int x = 0; x < ctx->width; ++x ) 
+      {
+        if (seuilValue > greyLevel(pixelIn))
+          setGreyLevel(pixelOut,0);
+        else
+          setGreyLevel(pixelOut,255);
+
+        ++pixelIn;
+        ++pixelOut;
+      }
+    dataOutput += rowstrideOut; // passe à la ligne suivante
+    dataInput += rowstrideIn;
+  }
   return TRUE;
 }
 
