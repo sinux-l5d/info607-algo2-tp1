@@ -29,6 +29,17 @@ typedef struct {
   guchar bleu;
 } Pixel;
 
+/**
+   Un Objet est un un wrapper d'un pixel permettant l'organisation en forêt.
+   Un pixel a maintenant un rang et un père.
+   Un ancètre dont le père est lui même s'appelle la racine.
+ */
+typedef struct SObjet {
+  Pixel* pixel; // adresse du pixel dans le pixbuf
+  int rang;
+  struct SObjet* pere;
+} Objet;
+
 
 //-----------------------------------------------------------------------------
 // Déclaration des fonctions
@@ -36,6 +47,7 @@ typedef struct {
 gboolean selectInput( GtkWidget *widget, gpointer data );
 gboolean selectOutput( GtkWidget *widget, gpointer data );
 gboolean seuillerImage( GtkWidget *widget, gpointer data );
+gboolean composantesConnexes( GtkWidget *widget, gpointer data );
 GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt );
 void analyzePixbuf( GdkPixbuf* pixbuf );
 GdkPixbuf* creerImage( int width, int height );
@@ -43,6 +55,12 @@ unsigned char greyLevel( Pixel* data );
 void setGreyLevel( Pixel* data, unsigned char g );
 Pixel* gotoPixel( GdkPixbuf* pixbuf, int x, int y );
 void disk( GdkPixbuf* pixbuf, int r );
+
+Objet* creerEnsembles( GdkPixbuf* pixbuf );
+Objet* trouverPasOpti( Objet* obj );
+void unionPasOpti( Objet* obj1, Objet* obj2 );
+Objet* trouverOpti( Objet* obj );
+void unionOpti( Objet* obj1, Objet* obj2 );
 
 
 //-----------------------------------------------------------------------------
@@ -119,6 +137,26 @@ gboolean seuillerImage( GtkWidget *widget, gpointer data )
   return TRUE;
 }
 
+gboolean composantesConnexes( GtkWidget *widget, gpointer data )
+{
+  Contexte* ctx = (Contexte*) data;
+  Objet* objects = creerEnsembles(ctx->pixbuf_output);
+  for(int i = 0; i < ctx->width; i++)
+  {
+    // 3a
+    if(greyLevel(objects[i].pixel) == greyLevel(objects[i+1].pixel))
+    {
+      unionOpti(&objects[i],&objects[i+1]);
+    }
+    // 3b
+    if(greyLevel(objects[i].pixel) == greyLevel(objects[i+ctx->width].pixel))
+    {
+      unionOpti(&objects[i],&objects[i+ctx->width]);
+    }
+  }
+  return TRUE;
+}
+
 /// Charge l'image donnée et crée l'interface.
 GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
 {
@@ -131,6 +169,7 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   GtkWidget* button_select_output;
   GtkWidget* seuil_widget;
   GtkWidget* seuil_button;
+  GtkWidget* connexe_button;
   GError**   error = NULL;
 
   /* Crée une fenêtre. */
@@ -163,6 +202,7 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   button_select_output = gtk_button_new_with_label( "Output" );
   // Creer le bouton seuil
   seuil_button = gtk_button_new_with_label( "Seuiller");
+  connexe_button = gtk_button_new_with_label( "Composantes connexes" );
   // Connecte la réaction gtk_main_quit à l'événement "clic" sur ce bouton.
   g_signal_connect( button_select_input, "clicked",
                     G_CALLBACK( selectInput ),
@@ -172,6 +212,9 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
                     pCtxt );
   g_signal_connect( seuil_button, "clicked",
                     G_CALLBACK(seuillerImage),
+                    pCtxt );
+  g_signal_connect( connexe_button, "clicked",
+                    G_CALLBACK(composantesConnexes),
                     pCtxt );
   gtk_container_add( GTK_CONTAINER( vbox2 ), button_select_input );
   gtk_container_add( GTK_CONTAINER( vbox2 ), button_select_output );
@@ -185,6 +228,7 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   gtk_container_add( GTK_CONTAINER( vbox1 ), hbox1 );
   gtk_container_add( GTK_CONTAINER( vbox1 ), seuil_widget );
   gtk_container_add( GTK_CONTAINER( vbox1 ), seuil_button );
+  gtk_container_add( GTK_CONTAINER( vbox1 ), connexe_button );
   gtk_container_add( GTK_CONTAINER( vbox1 ), button_quit );
   // Rajoute la vbox  dans le conteneur window.
   gtk_container_add( GTK_CONTAINER( window ), vbox1 );
@@ -284,4 +328,73 @@ void disk( GdkPixbuf* pixbuf, int r )
           ++pixel; // sur une ligne, les pixels se suivent
         }
     }
+}
+
+/**
+   Creer un objet par pixel
+ */
+Objet* creerEnsembles( GdkPixbuf* pixbuf ) 
+{
+  int rowstride = gdk_pixbuf_get_rowstride( pixbuf );
+  guchar* data  = gdk_pixbuf_get_pixels( pixbuf );
+  int width     = gdk_pixbuf_get_width( pixbuf );
+  int height    = gdk_pixbuf_get_height( pixbuf );
+
+  Objet *objects = (Objet*) malloc(width*height*sizeof(Objet));
+  int cpt_obj = 0;
+
+  for ( int y = 0; y < height; ++y )
+  {
+    Pixel* pixel = (Pixel*) data;
+    for ( int x = 0; x < width; ++x ) 
+    {
+      objects[cpt_obj].pixel = pixel;
+      objects[cpt_obj].rang = 1;
+      objects[cpt_obj].pere = &objects[cpt_obj];
+
+      pixel++;
+      cpt_obj++;
+    }
+    data += rowstride;
+  }
+
+  return objects;
+}
+
+Objet* trouverPasOpti( Objet* object )
+{
+  if(object == object->pere)
+  {
+    return object;
+  }
+  return trouverPasOpti( object->pere );
+}
+
+Objet* trouverOpti( Objet* obj )
+{
+  if (obj != obj->pere)
+    obj->pere = trouverOpti( obj->pere);
+
+  return obj->pere;
+}
+
+void unionPasOpti(Objet* obj1, Objet* obj2)
+{
+  Objet* u = trouverPasOpti( obj1 );
+  Objet* y = trouverPasOpti( obj2 );
+  u->pere = y;
+}
+
+void unionOpti( Objet* obj1, Objet* obj2 )
+{
+  Objet* u = trouverOpti(obj1);
+  Objet* v = trouverOpti(obj2);
+
+  if (u->rang > v->rang)
+    v->pere = u;
+  else 
+    u->pere = v;
+  
+  if (u->rang == v->rang)
+    v->rang = v->rang + 1;
 }
