@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <gtk/gtk.h>
 
+#define bool int
+
 //-----------------------------------------------------------------------------
 // Déclaration des types
 //-----------------------------------------------------------------------------
@@ -139,21 +141,50 @@ gboolean seuillerImage( GtkWidget *widget, gpointer data )
 
 gboolean composantesConnexes( GtkWidget *widget, gpointer data )
 {
-  Contexte* ctx = (Contexte*) data;
-  Objet* objects = creerEnsembles(ctx->pixbuf_output);
-  for(int i = 0; i < ctx->width; i++)
+  Contexte *ctx = (Contexte*) data;
+  Objet *objects = creerEnsembles(ctx->pixbuf_output);
+  int size = ( ctx->width) * ( ctx->height - 1 );
+
+  for(int i = 0; i < size; i++)
   {
     // 3a
     if(greyLevel(objects[i].pixel) == greyLevel(objects[i+1].pixel))
     {
-      unionOpti(&objects[i],&objects[i+1]);
+      unionOpti(&objects[i], &objects[i+1]);
     }
+
     // 3b
-    if(greyLevel(objects[i].pixel) == greyLevel(objects[i+ctx->width].pixel))
-    {
+    bool isLastLine = i == (size - ctx-> width);
+    if( !isLastLine && greyLevel(objects[i].pixel) == greyLevel(objects[i+ctx->width].pixel))
       unionOpti(&objects[i],&objects[i+ctx->width]);
-    }
   }
+
+  for(int i = 0; i < size; i++) 
+  {
+    // si le père n'à pas de couleur
+    Pixel *pixelPere = trouverOpti(&objects[i])->pixel;
+    if (pixelPere->bleu == pixelPere->rouge && pixelPere->bleu == pixelPere->vert)
+    {
+      // on génère des couleurs pour le père
+      char r = rand() % 256,
+          v = rand() % 256,
+          b = rand() % 256;
+
+      pixelPere->rouge = r;
+      pixelPere->vert = v;
+      pixelPere->bleu = b;
+    }
+    // on recopie les valeurs dans le fils
+    objects[i].pixel->rouge = pixelPere->rouge;
+    objects[i].pixel->vert  = pixelPere->vert;
+    objects[i].pixel->bleu  = pixelPere->bleu;
+  }
+
+  // Place le pixbuf à visualiser dans le bon widget.
+  gtk_image_set_from_pixbuf( GTK_IMAGE( ctx->image ), ctx->pixbuf_output );
+  // Force le réaffichage du widget.
+  gtk_widget_queue_draw( ctx->image );
+
   return TRUE;
 }
 
