@@ -16,6 +16,7 @@ typedef struct SContexte {
   GdkPixbuf* pixbuf_input;
   GdkPixbuf* pixbuf_output;
   GtkWidget* image;
+  GtkWidget* seuil;
 } Contexte;
 
 /**
@@ -34,6 +35,7 @@ typedef struct {
 //-----------------------------------------------------------------------------
 gboolean selectInput( GtkWidget *widget, gpointer data );
 gboolean selectOutput( GtkWidget *widget, gpointer data );
+gboolean seuillerImage( GtkWidget *widget, gpointer data );
 GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt );
 void analyzePixbuf( GdkPixbuf* pixbuf );
 GdkPixbuf* creerImage( int width, int height );
@@ -88,6 +90,11 @@ gboolean selectOutput( GtkWidget *widget, gpointer data )
   return TRUE;
 }
 
+gboolean seuillerImage( GtkWidget *widget, gpointer data )
+{
+  return TRUE;
+}
+
 /// Charge l'image donnée et crée l'interface.
 GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
 {
@@ -98,6 +105,8 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   GtkWidget* button_quit;
   GtkWidget* button_select_input;
   GtkWidget* button_select_output;
+  GtkWidget* seuil_widget;
+  GtkWidget* seuil_button;
   GError**   error = NULL;
 
   /* Crée une fenêtre. */
@@ -107,6 +116,11 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   // Crée deux conteneurs vertical box.
   vbox1 = gtk_box_new( GTK_ORIENTATION_VERTICAL, 10 );
   vbox2 = gtk_box_new( GTK_ORIENTATION_VERTICAL, 10 );
+
+  // Creer la bar pour le seuil
+  seuil_widget = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0, 255, 1 );
+  pCtxt->seuil = seuil_widget;
+
   // Crée le pixbuf source et le pixbuf destination
   pCtxt->pixbuf_input  = gdk_pixbuf_new_from_file( image_filename, error );
   pCtxt->width         = gdk_pixbuf_get_width( pCtxt->pixbuf_input );           // Largeur de l'image en pixels
@@ -123,12 +137,17 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   // Crée les boutons de sélection "source"/"destination".
   button_select_input  = gtk_button_new_with_label( "Input" );
   button_select_output = gtk_button_new_with_label( "Output" );
+  // Creer le bouton seuil
+  seuil_button = gtk_button_new_with_label( "Seuiller");
   // Connecte la réaction gtk_main_quit à l'événement "clic" sur ce bouton.
   g_signal_connect( button_select_input, "clicked",
                     G_CALLBACK( selectInput ),
                     pCtxt );
   g_signal_connect( button_select_output, "clicked",
                     G_CALLBACK( selectOutput ),
+                    pCtxt );
+  g_signal_connect( seuil_button, "clicked",
+                    G_CALLBACK(seuillerImage),
                     pCtxt );
   gtk_container_add( GTK_CONTAINER( vbox2 ), button_select_input );
   gtk_container_add( GTK_CONTAINER( vbox2 ), button_select_output );
@@ -140,6 +159,8 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
                     NULL);
   // Rajoute tout dans le conteneur vbox.
   gtk_container_add( GTK_CONTAINER( vbox1 ), hbox1 );
+  gtk_container_add( GTK_CONTAINER( vbox1 ), seuil_widget );
+  gtk_container_add( GTK_CONTAINER( vbox1 ), seuil_button );
   gtk_container_add( GTK_CONTAINER( vbox1 ), button_quit );
   // Rajoute la vbox  dans le conteneur window.
   gtk_container_add( GTK_CONTAINER( window ), vbox1 );
