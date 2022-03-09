@@ -1,0 +1,51 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/gtk-3.0",
+                "/usr/include/pango-1.0",
+                "/usr/include/glib-2.0",
+                "/usr/lib/glib-2.0/include",
+                "/usr/include/sysprof-4",
+                "/usr/include/harfbuzz",
+                "/usr/include/freetype2",
+                "/usr/include/libpng16",
+                "/usr/include/libmount",
+                "/usr/include/blkid",
+                "/usr/include/fribidi",
+                "/usr/include/cairo",
+                "/usr/include/lzo",
+                "/usr/include/pixman-1",
+                "/usr/include/gdk-pixbuf-2.0",
+                "/usr/include/gio-unix-2.0",
+                "/usr/include/cloudproviders",
+                "/usr/include/atk-1.0",
+                "/usr/include/at-spi2-atk/2.0",
+                "/usr/include/dbus-1.0",
+                "/usr/lib/dbus-1.0/include"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerArgs": [
+                "-g",
+                "-Wall",
+                "-Werror",
+                "-pedantic",
+                "-std=c11"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        }
+    ],
+    "version": 4
+}
