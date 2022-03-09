@@ -143,18 +143,18 @@ gboolean composantesConnexes( GtkWidget *widget, gpointer data )
 {
   Contexte *ctx = (Contexte*) data;
   Objet *objects = creerEnsembles(ctx->pixbuf_output);
-  int size = ( ctx->width) * ( ctx->height - 1 );
+  int size = ( ctx->width ) * ( ctx->height );
 
   for(int i = 0; i < size; i++)
   {
     // 3a
-    if(greyLevel(objects[i].pixel) == greyLevel(objects[i+1].pixel))
+    bool isLastColumn = (i % ctx->width) == ctx->width - 1;
+    if(!isLastColumn && greyLevel(objects[i].pixel) == greyLevel(objects[i+1].pixel))
     {
       unionOpti(&objects[i], &objects[i+1]);
     }
-
     // 3b
-    bool isLastLine = i == (size - ctx-> width);
+    bool isLastLine = i >= (size - ctx-> width);
     if( !isLastLine && greyLevel(objects[i].pixel) == greyLevel(objects[i+ctx->width].pixel))
       unionOpti(&objects[i],&objects[i+ctx->width]);
   }
