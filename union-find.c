@@ -173,28 +173,47 @@ gboolean composantesConnexes( GtkWidget *widget, gpointer data )
       unionOpti(&objects[i],&objects[i+ctx->width]);
   }
 
-  for(int i = 0; i < size; i++) 
-  {
-    Pixel *pixelPere = trouverOpti(&objects[i])->pixel;
-    // si le père n'à pas de couleur (aka, r=g=b, noir et blanc)
-    if (pixelPere->bleu == pixelPere->rouge && pixelPere->bleu == pixelPere->vert)
-    {
-      // 4
-      // on génère des couleurs pour le père
-      char r = rand() % 256,
-          v = rand() % 256,
-          b = rand() % 256;
+  // 4 & 5
+  StatCouleur *stats = (StatCouleur*) calloc( 4, size * sizeof(StatCouleur) );
 
-      pixelPere->rouge = r;
-      pixelPere->vert = v;
-      pixelPere->bleu = b;
-    }
-    // 5
-    // on recopie les valeurs dans le fils
-    objects[i].pixel->rouge = pixelPere->rouge;
-    objects[i].pixel->vert  = pixelPere->vert;
-    objects[i].pixel->bleu  = pixelPere->bleu;
+  // 6
+  guchar* data_input  = gdk_pixbuf_get_pixels( ctx ->pixbuf_input );
+  guchar* data_output = gdk_pixbuf_get_pixels( ctx ->pixbuf_output );
+  for ( int i = 0; i < size; ++i )
+  {
+    Objet* rep = trouverOpti( &objects[ i ] ); // tu trouve le représentant
+    long int j = rep - objects; // tu trouve sons indice dans les tableaux
+    Pixel* pixel_src = (Pixel*) ( data_input + ( (guchar*) objects[ i ].pixel - data_output ) ); 
+    // pixel_src est la couleur de ce pixel dans l'image input.
+    // On l'ajoute à la stat du représentant j.
+    stats[ j ].rouge += pixel_src->rouge;
+    stats[ j ].vert  += pixel_src->vert;
+    stats[ j ].bleu  += pixel_src->bleu;
+    stats[ j ].nb += 1; // On aura donc la somme cumulée
   }
+
+  // 7
+  for ( int i = 0; i < size; ++i )
+  {
+    // C'est un représentant
+    if (stats[ i ].nb != 0) {
+      objects[ i ].pixel->rouge = stats[ i ].rouge / stats[ i ].nb;
+      objects[ i ].pixel->vert  = stats[ i ].vert  / stats[ i ].nb;
+      objects[ i ].pixel->bleu  = stats[ i ].bleu  / stats[ i ].nb;
+    }
+  }
+
+  free(stats);
+
+  // 8
+  for ( int i = 0; i < size; ++i )
+  {
+    Objet* rep = trouverOpti( &objects[ i ] ); // tu trouve le représentant
+    objects[ i ].pixel->rouge = rep->pixel->rouge;
+    objects[ i ].pixel->bleu  = rep->pixel->bleu;
+    objects[ i ].pixel->vert  = rep->pixel->vert;
+  }
+
 
   // struct timespec current; // Stoppe l'horloge
   // clock_gettime(CLOCK_REALTIME, &current); //Linux gettime
@@ -202,7 +221,6 @@ gboolean composantesConnexes( GtkWidget *widget, gpointer data )
   //          ( current.tv_nsec - myTimerStart.tv_nsec)/1000000.0);
   // printf( "time = %lf ms.\n", t );
 
-  // 6
   // Place le pixbuf à visualiser dans le bon widget.
   gtk_image_set_from_pixbuf( GTK_IMAGE( ctx->image ), ctx->pixbuf_output );
   // Force le réaffichage du widget.
