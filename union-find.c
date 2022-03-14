@@ -20,6 +20,7 @@ typedef struct SContexte {
   GdkPixbuf* pixbuf_output;
   GtkWidget* image;
   GtkWidget* seuil;
+  GtkWidget* floue;
 } Contexte;
 
 /**
@@ -53,6 +54,15 @@ typedef struct {
   int nb;
 } StatCouleur;
 
+/**
+  structure de couleur au format TSV
+*/
+typedef struct {
+  int t;    // teinte comme angle en degrés
+  double s; // saturation comme nombre entre 0 et 1
+  double v; // valeur ou brillance comme nombre entre 0 et 1
+} TSVCouleur;
+
 //-----------------------------------------------------------------------------
 // Déclaration des fonctions
 //-----------------------------------------------------------------------------
@@ -60,6 +70,7 @@ gboolean selectInput( GtkWidget *widget, gpointer data );
 gboolean selectOutput( GtkWidget *widget, gpointer data );
 gboolean seuillerImage( GtkWidget *widget, gpointer data );
 gboolean composantesConnexes( GtkWidget *widget, gpointer data );
+gboolean composantesConnexesFloues( GtkWidget *widget, gpointer data );
 GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt );
 void analyzePixbuf( GdkPixbuf* pixbuf );
 GdkPixbuf* creerImage( int width, int height );
@@ -73,6 +84,8 @@ Objet* trouverPasOpti( Objet* obj );
 void unionPasOpti( Objet* obj1, Objet* obj2 );
 Objet* trouverOpti( Objet* obj );
 void unionOpti( Objet* obj1, Objet* obj2 );
+TSVCouleur tsv( Pixel* pixel );
+double similitude( Pixel* p1, Pixel* p2 );
 
 
 //-----------------------------------------------------------------------------
@@ -151,9 +164,6 @@ gboolean seuillerImage( GtkWidget *widget, gpointer data )
 
 gboolean composantesConnexes( GtkWidget *widget, gpointer data )
 {
-  // struct timespec myTimerStart;
-  // clock_gettime(CLOCK_REALTIME, &myTimerStart); // Démarre l'horloge
-
   Contexte *ctx = (Contexte*) data;
   // 1
   Objet *objects = creerEnsembles(ctx->pixbuf_output);
@@ -164,9 +174,7 @@ gboolean composantesConnexes( GtkWidget *widget, gpointer data )
     // 3a
     bool isLastColumn = (i % ctx->width) == ctx->width - 1;
     if(!isLastColumn && greyLevel(objects[i].pixel) == greyLevel(objects[i+1].pixel))
-    {
       unionOpti(&objects[i], &objects[i+1]);
-    }
     // 3b
     bool isLastLine = i >= (size - ctx-> width);
     if( !isLastLine && greyLevel(objects[i].pixel) == greyLevel(objects[i+ctx->width].pixel))
@@ -179,6 +187,81 @@ gboolean composantesConnexes( GtkWidget *widget, gpointer data )
   // 6
   guchar* data_input  = gdk_pixbuf_get_pixels( ctx ->pixbuf_input );
   guchar* data_output = gdk_pixbuf_get_pixels( ctx ->pixbuf_output );
+  for ( int i = 0; i < size; ++i )
+  {
+    Objet* rep = trouverOpti( &objects[ i ] ); // tu trouve le représentant
+    long int j = rep - objects; // tu trouve sons indice dans les tableaux
+    Pixel* pixel_src = (Pixel*) ( data_input + ( (guchar*) objects[ i ].pixel - data_output ) ); 
+    // pixel_src est la couleur de ce pixel dans l'image input.
+    // On l'ajoute à la stat du représentant j.
+    stats[ j ].rouge += pixel_src->rouge;
+    stats[ j ].vert  += pixel_src->vert;
+    stats[ j ].bleu  += pixel_src->bleu;
+    stats[ j ].nb += 1; // On aura donc la somme cumulée
+  }
+
+  // 7
+  for ( int i = 0; i < size; ++i )
+  {
+    // C'est un représentant
+    if (stats[ i ].nb != 0) {
+      objects[ i ].pixel->rouge = stats[ i ].rouge / stats[ i ].nb;
+      objects[ i ].pixel->vert  = stats[ i ].vert  / stats[ i ].nb;
+      objects[ i ].pixel->bleu  = stats[ i ].bleu  / stats[ i ].nb;
+    }
+  }
+
+  free(stats);
+
+  // 8
+  for ( int i = 0; i < size; ++i )
+  {
+    Objet* rep = trouverOpti( &objects[ i ] ); // tu trouve le représentant
+    objects[ i ].pixel->rouge = rep->pixel->rouge;
+    objects[ i ].pixel->bleu  = rep->pixel->bleu;
+    objects[ i ].pixel->vert  = rep->pixel->vert;
+  }
+
+  // Place le pixbuf à visualiser dans le bon widget.
+  gtk_image_set_from_pixbuf( GTK_IMAGE( ctx->image ), ctx->pixbuf_output );
+  // Force le réaffichage du widget.
+  gtk_widget_queue_draw( ctx->image );
+
+  return TRUE;
+}
+
+gboolean composantesConnexesFloues( GtkWidget *widget, gpointer data )
+{
+  Contexte *ctx = (Contexte*) data;
+
+  // copie par valeur
+  ctx->pixbuf_output = gdk_pixbuf_copy(ctx->pixbuf_input);
+
+  double floue = gtk_range_get_value( GTK_RANGE( ctx->floue ) );
+  // 1
+  Objet *objects = creerEnsembles(ctx->pixbuf_output);
+  int size = ( ctx->width ) * ( ctx->height );
+
+  for(int i = 0 /*2*/; i < size; i++)
+  {
+    // 3a
+    bool isLastColumn = (i % ctx->width) == ctx->width - 1;
+    // printf("sim : %f\n",similitude(objects[ i ].pixel, objects[ i+1 ].pixel));
+    if(!isLastColumn && similitude(objects[ i ].pixel, objects[ i+1 ].pixel) <= floue)
+      unionOpti(&objects[ i ], &objects[ i+1 ]);
+    // 3b
+    bool isLastLine = i >= (size - ctx-> width);
+    if( !isLastLine && similitude(objects[ i ].pixel, objects[ i + ctx->width ].pixel) <= floue)
+      unionOpti(&objects[ i ], &objects[ i + ctx->width ]);
+  }
+
+  // 4 & 5
+  StatCouleur *stats = (StatCouleur*) calloc( 4, size * sizeof(StatCouleur) );
+
+  // 6
+  guchar* data_input  = gdk_pixbuf_get_pixels( ctx ->pixbuf_input );
+  guchar* data_output = gdk_pixbuf_get_pixels( ctx ->pixbuf_output );
+
   for ( int i = 0; i < size; ++i )
   {
     Objet* rep = trouverOpti( &objects[ i ] ); // tu trouve le représentant
@@ -240,6 +323,8 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   GtkWidget* button_select_input;
   GtkWidget* button_select_output;
   GtkWidget* seuil_widget;
+  GtkWidget* floue_widget;
+  GtkWidget* floue_button;
   GtkWidget* seuil_button;
   GtkWidget* connexe_button;
   GError**   error = NULL;
@@ -255,6 +340,8 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   // Creer la bar pour le seuil
   seuil_widget = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0, 255, 1 );
   pCtxt->seuil = seuil_widget;
+  floue_widget = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0, 255, 1 );
+  pCtxt->floue = floue_widget;
 
   // Crée le pixbuf source et le pixbuf destination
   pCtxt->pixbuf_input  = gdk_pixbuf_new_from_file( image_filename, error );
@@ -274,6 +361,8 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   button_select_output = gtk_button_new_with_label( "Output" );
   // Creer le bouton seuil
   seuil_button = gtk_button_new_with_label( "Seuiller");
+  floue_button = gtk_button_new_with_label( "Composantes connexes floues");
+
   connexe_button = gtk_button_new_with_label( "Composantes connexes" );
   // Connecte la réaction gtk_main_quit à l'événement "clic" sur ce bouton.
   g_signal_connect( button_select_input, "clicked",
@@ -288,6 +377,9 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   g_signal_connect( connexe_button, "clicked",
                     G_CALLBACK(composantesConnexes),
                     pCtxt );
+  g_signal_connect( floue_button, "clicked",
+                    G_CALLBACK(composantesConnexesFloues),
+                    pCtxt );
   gtk_container_add( GTK_CONTAINER( vbox2 ), button_select_input );
   gtk_container_add( GTK_CONTAINER( vbox2 ), button_select_output );
   // Crée le bouton quitter.
@@ -301,6 +393,10 @@ GtkWidget* creerIHM( const char* image_filename, Contexte* pCtxt )
   gtk_container_add( GTK_CONTAINER( vbox1 ), seuil_widget );
   gtk_container_add( GTK_CONTAINER( vbox1 ), seuil_button );
   gtk_container_add( GTK_CONTAINER( vbox1 ), connexe_button );
+
+  gtk_container_add( GTK_CONTAINER( vbox1 ), floue_widget );
+  gtk_container_add( GTK_CONTAINER( vbox1 ), floue_button );
+
   gtk_container_add( GTK_CONTAINER( vbox1 ), button_quit );
   // Rajoute la vbox  dans le conteneur window.
   gtk_container_add( GTK_CONTAINER( window ), vbox1 );
@@ -469,4 +565,55 @@ void unionOpti( Objet* obj1, Objet* obj2 )
   
   if (u->rang == v->rang)
     v->rang = v->rang + 1;
+}
+
+TSVCouleur tsv(Pixel* pixel)
+{
+  TSVCouleur tsv;
+
+  guchar max = fmaxf(fmaxf(pixel->bleu, pixel->rouge), pixel->vert);
+  guchar min = fminf(fminf(pixel->bleu, pixel->rouge), pixel->vert);
+
+  // pour t
+  if (min == max)
+  {
+    tsv.t = 0;
+  }
+  else if (max == pixel->rouge)
+  {
+    tsv.t = ( 60 * (pixel->vert - pixel->bleu) / (max - min) + 360 ) % 360;
+  }
+  else if (max == pixel->vert)
+  {
+    tsv.t = 60 * ((pixel->bleu - pixel->rouge) / (max - min)) + 120;
+  }
+  else if (max == pixel->bleu)
+  {
+    tsv.t = 60 * ((pixel->rouge - pixel->vert) / (max - min)) + 240;
+  }
+
+  // pour s
+  if (max == 0)
+  {
+    tsv.s = 0;
+  }
+  else
+  {
+    tsv.s = 1 - (min / max);
+  }
+
+  // pour v
+  tsv.v = max;
+
+  return tsv;
+}
+
+double similitude( Pixel* p1, Pixel* p2 ) 
+{
+  TSVCouleur tsv1 = tsv( p1 );
+  TSVCouleur tsv2 = tsv( p2 );
+  int diff = tsv1.t - tsv2.t;
+  while ( diff >= 180 ) diff -= 360;
+  while ( diff <= -180 ) diff += 360;
+  return abs( (double) diff ) + 5.0 * abs( tsv1.s - tsv2.s ) + 10.0 * abs( tsv1.v - tsv2.v );
 }
