@@ -2,6 +2,7 @@
 #include <math.h>
 #include <assert.h>
 #include <gtk/gtk.h>
+#include <time.h>
 
 #define bool int
 
@@ -42,6 +43,15 @@ typedef struct SObjet {
   struct SObjet* pere;
 } Objet;
 
+/**
+  structure pour stocker la moyenne des couleurs
+*/
+typedef struct {
+  double rouge;
+  double vert;
+  double bleu;
+  int nb;
+} StatCouleur;
 
 //-----------------------------------------------------------------------------
 // Déclaration des fonctions
@@ -141,11 +151,15 @@ gboolean seuillerImage( GtkWidget *widget, gpointer data )
 
 gboolean composantesConnexes( GtkWidget *widget, gpointer data )
 {
+  // struct timespec myTimerStart;
+  // clock_gettime(CLOCK_REALTIME, &myTimerStart); // Démarre l'horloge
+
   Contexte *ctx = (Contexte*) data;
+  // 1
   Objet *objects = creerEnsembles(ctx->pixbuf_output);
   int size = ( ctx->width ) * ( ctx->height );
 
-  for(int i = 0; i < size; i++)
+  for(int i = 0 /*2*/; i < size; i++)
   {
     // 3a
     bool isLastColumn = (i % ctx->width) == ctx->width - 1;
@@ -161,10 +175,11 @@ gboolean composantesConnexes( GtkWidget *widget, gpointer data )
 
   for(int i = 0; i < size; i++) 
   {
-    // si le père n'à pas de couleur
     Pixel *pixelPere = trouverOpti(&objects[i])->pixel;
+    // si le père n'à pas de couleur (aka, r=g=b, noir et blanc)
     if (pixelPere->bleu == pixelPere->rouge && pixelPere->bleu == pixelPere->vert)
     {
+      // 4
       // on génère des couleurs pour le père
       char r = rand() % 256,
           v = rand() % 256,
@@ -174,12 +189,20 @@ gboolean composantesConnexes( GtkWidget *widget, gpointer data )
       pixelPere->vert = v;
       pixelPere->bleu = b;
     }
+    // 5
     // on recopie les valeurs dans le fils
     objects[i].pixel->rouge = pixelPere->rouge;
     objects[i].pixel->vert  = pixelPere->vert;
     objects[i].pixel->bleu  = pixelPere->bleu;
   }
 
+  // struct timespec current; // Stoppe l'horloge
+  // clock_gettime(CLOCK_REALTIME, &current); //Linux gettime
+  // double t = (( current.tv_sec - myTimerStart.tv_sec) *1000 +
+  //          ( current.tv_nsec - myTimerStart.tv_nsec)/1000000.0);
+  // printf( "time = %lf ms.\n", t );
+
+  // 6
   // Place le pixbuf à visualiser dans le bon widget.
   gtk_image_set_from_pixbuf( GTK_IMAGE( ctx->image ), ctx->pixbuf_output );
   // Force le réaffichage du widget.
